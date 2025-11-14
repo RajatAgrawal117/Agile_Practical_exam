@@ -1,76 +1,39 @@
 name: CI
 
-on:
-  push:
-  pull_request:
+on: [push, pull_request]
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
-
-      - name: Install dependencies
+          python-version: '3.11'
+      
+      - name: Install deps
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest
-
-      - name: Start server (background)
+          pip install pytest requests
+      
+      - name: Start server
+        run: python app.py &
+      
+      - name: Run tests
         run: |
-          python -u app.py &
           sleep 2
-
-      - name: Run tests and save JUnit report
-        run: |
-          pytest -q --junitxml=report.xml
-
-      - name: Upload JUnit report
+          pytest --junitxml=report.xml
+      
+      - name: Upload report
         uses: actions/upload-artifact@v4
         with:
           name: junit-report
           path: report.xml
-
-      - name: Send Slack notification
+      
+      - name: Slack notify
         if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
         run: |
-          python - <<EOF
-          import os, json, xml.etree.ElementTree as ET, sys
-          try:
-              import requests
-          except ImportError:
-              print("requests not installed, skipping Slack notification")
-              sys.exit(0)
-          
-          try:
-              tree = ET.parse('report.xml')
-              root = tree.getroot()
-              tests = int(root.attrib.get('tests', 0))
-              failures = int(root.attrib.get('failures', 0))
-              errors = int(root.attrib.get('errors', 0))
-              skipped = int(root.attrib.get('skipped', 0)) if 'skipped' in root.attrib else 0
-              passed = tests - failures - errors - skipped
-              summary = f"Tests: {tests}, Passed: {passed}, Failures: {failures}, Errors: {errors}, Skipped: {skipped}"
-              status = "SUCCESS" if failures == 0 and errors == 0 else "FAILURE"
-              emoji = ":white_check_mark:" if status == "SUCCESS" else ":x:"
-              payload = {
-                  "text": f"{emoji} *CI Test Report - {status}*\n{summary}"
-              }
-              webhook = os.environ.get("SLACK_WEBHOOK")
-              if not webhook:
-                  print("No SLACK_WEBHOOK env var set, skipping notification")
-                  sys.exit(0)
-              resp = requests.post(webhook, json=payload, timeout=10)
-              print(f"Slack notification sent: {resp.status_code}")
-          except Exception as e:
-              print(f"Failed to send Slack notification: {e}")
-              sys.exit(0)
-          EOF
+          python slack_notify.py
