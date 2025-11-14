@@ -2,21 +2,18 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-@app.route("/status", methods=["GET"])
+@app.route('/status')
 def status():
-    return jsonify({"status": "ok"})
+    return {"status": "ok"}
 
-@app.route("/sum", methods=["GET"])
-def summation():
-    a = request.args.get("a", None)
-    b = request.args.get("b", None)
+@app.route('/sum')
+def sum_numbers():
     try:
-        a_f = float(a)
-        b_f = float(b)
-    except (TypeError, ValueError):
-        return jsonify({"error": "a and b must be numbers"}), 400
-    return jsonify({"sum": a_f + b_f})
-    
-if __name__ == "__main__":
-    # Use 127.0.0.1 so tests using requests can hit it locally
-    app.run(host="127.0.0.1", port=5000)
+        a = float(request.args.get('a', 0))
+        b = float(request.args.get('b', 0))
+        return {"result": a + b}
+    except ValueError:
+        return {"error": "Invalid numbers"}, 400
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=False)
