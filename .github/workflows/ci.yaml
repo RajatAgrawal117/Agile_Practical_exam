@@ -24,9 +24,7 @@ jobs:
 
       - name: Start server (background)
         run: |
-          # start app in background; ensure it doesn't block the job
           python -u app.py &
-          # give server time to start
           sleep 2
 
       - name: Run tests and save JUnit report
@@ -40,31 +38,39 @@ jobs:
           path: report.xml
 
       - name: Send Slack notification
-        if: always()        # run on success & failure
+        if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
         run: |
-          python - <<'PY'
-import os, json, xml.etree.ElementTree as ET, requests, sys
-try:
-    tree = ET.parse('report.xml')
-    root = tree.getroot()
-    tests = int(root.attrib.get('tests', 0))
-    failures = int(root.attrib.get('failures', 0))
-    errors = int(root.attrib.get('errors', 0))
-    skipped = int(root.attrib.get('skipped', 0)) if 'skipped' in root.attrib else 0
-    passed = tests - failures - errors - skipped
-    summary = f"Tests: {tests}, Passed: {passed}, Failures: {failures}, Errors: {errors}, Skipped: {skipped}"
-    status = "SUCCESS" if failures == 0 and errors == 0 else "FAILURE"
-    payload = {
-        "text": f":robot_face: *CI Test Report - {status}*\\n{summary}"
-    }
-    webhook = os.environ.get("SLACK_WEBHOOK")
-    if not webhook:
-        print("No SLACK_WEBHOOK env var set")
-        sys.exit(0)
-    resp = requests.post(webhook, json=payload, timeout=10)
-    print("Slack response:", resp.status_code)
-except Exception as e:
-    print("Failed to create/send Slack message:", e)
-PY
+          python - <<EOF
+          import os, json, xml.etree.ElementTree as ET, sys
+          try:
+              import requests
+          except ImportError:
+              print("requests not installed, skipping Slack notification")
+              sys.exit(0)
+          
+          try:
+              tree = ET.parse('report.xml')
+              root = tree.getroot()
+              tests = int(root.attrib.get('tests', 0))
+              failures = int(root.attrib.get('failures', 0))
+              errors = int(root.attrib.get('errors', 0))
+              skipped = int(root.attrib.get('skipped', 0)) if 'skipped' in root.attrib else 0
+              passed = tests - failures - errors - skipped
+              summary = f"Tests: {tests}, Passed: {passed}, Failures: {failures}, Errors: {errors}, Skipped: {skipped}"
+              status = "SUCCESS" if failures == 0 and errors == 0 else "FAILURE"
+              emoji = ":white_check_mark:" if status == "SUCCESS" else ":x:"
+              payload = {
+                  "text": f"{emoji} *CI Test Report - {status}*\n{summary}"
+              }
+              webhook = os.environ.get("SLACK_WEBHOOK")
+              if not webhook:
+                  print("No SLACK_WEBHOOK env var set, skipping notification")
+                  sys.exit(0)
+              resp = requests.post(webhook, json=payload, timeout=10)
+              print(f"Slack notification sent: {resp.status_code}")
+          except Exception as e:
+              print(f"Failed to send Slack notification: {e}")
+              sys.exit(0)
+          EOF
