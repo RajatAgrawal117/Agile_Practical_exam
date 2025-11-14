@@ -7,6 +7,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,18 +21,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest
+          pip install pytest requests
 
-      - name: Start server (background)
+      - name: Start Flask server (background)
         run: |
-          # start app in background; ensure it doesn't block the job
-          python -u app.py &
-          # give server time to start
-          sleep 2
+          nohup python app.py > server.log 2>&1 &
+          sleep 3
 
-      - name: Run tests and save JUnit report
+      - name: Run tests
         run: |
-          pytest -q --junitxml=report.xml
+          pytest --junitxml=report.xml
 
       - name: Upload JUnit report
         uses: actions/upload-artifact@v4
@@ -39,32 +38,37 @@ jobs:
           name: junit-report
           path: report.xml
 
-      - name: Send Slack notification
-        if: always()        # run on success & failure
+      - name: Send Slack Notification
+        if: always()
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
         run: |
-          python - <<'PY'
-import os, json, xml.etree.ElementTree as ET, requests, sys
+          python << 'EOF'
+import os
+import xml.etree.ElementTree as ET
+import requests
+
 try:
-    tree = ET.parse('report.xml')
+    tree = ET.parse("report.xml")
     root = tree.getroot()
-    tests = int(root.attrib.get('tests', 0))
-    failures = int(root.attrib.get('failures', 0))
-    errors = int(root.attrib.get('errors', 0))
-    skipped = int(root.attrib.get('skipped', 0)) if 'skipped' in root.attrib else 0
+
+    tests = int(root.attrib.get("tests", 0))
+    failures = int(root.attrib.get("failures", 0))
+    errors = int(root.attrib.get("errors", 0))
+    skipped = int(root.attrib.get("skipped", 0)) if "skipped" in root.attrib else 0
     passed = tests - failures - errors - skipped
+
+    state = "SUCCESS" if failures == 0 and errors == 0 else "FAILURE"
     summary = f"Tests: {tests}, Passed: {passed}, Failures: {failures}, Errors: {errors}, Skipped: {skipped}"
-    status = "SUCCESS" if failures == 0 and errors == 0 else "FAILURE"
-    payload = {
-        "text": f":robot_face: *CI Test Report - {status}*\\n{summary}"
-    }
-    webhook = os.environ.get("SLACK_WEBHOOK")
-    if not webhook:
-        print("No SLACK_WEBHOOK env var set")
-        sys.exit(0)
-    resp = requests.post(webhook, json=payload, timeout=10)
-    print("Slack response:", resp.status_code)
+
+    payload = {"text": f":robot_face: *CI Test Report - {state}*\n{summary}"}
+
+    webhook = os.getenv("SLACK_WEBHOOK")
+    if webhook:
+        requests.post(webhook, json=payload, timeout=10)
+    else:
+        print("SLACK_WEBHOOK is not set")
+
 except Exception as e:
-    print("Failed to create/send Slack message:", e)
-PY
+    print("Error sending Slack message:", e)
+
