@@ -11,7 +11,7 @@ def sum_numbers():
     try:
         a = float(request.args.get('a', 0))
         b = float(request.args.get('b', 0))
-        return {"result": a + b}
+        return {"sum": a + b}
     except ValueError:
         return {"error": "Invalid numbers"}, 400
 

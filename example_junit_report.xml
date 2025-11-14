@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<testsuites>
-  <testsuite name="pytest" errors="0" failures="0" skipped="0" tests="4" time="0.123" timestamp="2024-01-15T10:30:00.000000" hostname="runner">
-    <testcase classname="test_app" name="test_status_endpoint" time="0.045"/>
-    <testcase classname="test_app" name="test_sum_endpoint" time="0.032"/>
-    <testcase classname="test_app" name="test_sum_endpoint_negative" time="0.028"/>
-    <testcase classname="test_app" name="test_sum_endpoint_invalid" time="0.018"/>
-  </testsuite>
-</testsuites>
